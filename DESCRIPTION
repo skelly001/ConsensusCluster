@@ -1,0 +1,23 @@
+Package: ConsensusCluster
+Type: Package
+Title: K-means Consensus Clustering
+Version: 0.1.0
+Authors@R: person("First", "Last", email = "your.email@example.com", role = c("aut", "cre"))
+Description: Implements k-means consensus clustering for robust cluster assignments.
+    This package provides functions to perform consensus clustering using k-means
+    algorithm with bootstrap resampling to generate stable cluster assignments.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends:
+    R (>= 4.0.0)
+Imports:
+    dplyr,
+    tidyr,
+    Matrix,
+    parallel,
+    pbapply,
+    purrr,
+    fastcluster,
+    stats
+RoxygenNote: 7.3.3
