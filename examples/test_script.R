@@ -1,5 +1,6 @@
 # Load the package function
 library(ConsensusCluster)
+library(MSnbase)
 
 (load("testData/RD8a_m1_imputed.RData"))
 

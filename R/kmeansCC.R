@@ -97,7 +97,7 @@ kmeansCC <- function(data, k, reps, ncores, seed = 0) {
 
   # Inner function: single bootstrap clustering iteration
   run_kmeans_iteration <- function(seed) {
-    .Random.seed <- seed
+    assign(".Random.seed", seed, envir = .GlobalEnv)
 
     # Bootstrap sample
     data_boot <- dplyr::slice_sample(as.data.frame(t(data)),
