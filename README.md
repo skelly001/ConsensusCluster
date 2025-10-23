@@ -6,23 +6,23 @@ An R package for performing k-means consensus clustering with bootstrap resampli
 
 You can install the package directly from this repository using `devtools`:
 
-```r
+``` r
 # Install devtools if you haven't already
 install.packages("devtools")
 
 # Install ConsensusCluster
-devtools::install_github("yourusername/ConsensusCluster")
+devtools::install_github("skelly001/ConsensusCluster")
 ```
 
 Or install locally:
 
-```r
+``` r
 devtools::install("path/to/ConsensusCluster")
 ```
 
 ## Quick Start
 
-```r
+``` r
 library(ConsensusCluster)
 
 # Create sample data
@@ -49,11 +49,11 @@ Performs consensus clustering using k-means algorithm with bootstrap resampling.
 
 ### Parameters
 
-- `data`: A numeric matrix or data frame with features in rows and samples in columns
-- `k`: Integer. The number of clusters to identify
-- `reps`: Integer. The number of bootstrap iterations to perform (default: 100)
-- `ncores`: Integer. The number of CPU cores to use for parallel processing (default: 1)
-- `seed`: Integer. Random seed for reproducibility (default: 0)
+-   `data`: A numeric matrix or data frame with features in rows and samples in columns
+-   `k`: Integer. The number of clusters to identify
+-   `reps`: Integer. The number of bootstrap iterations to perform (default: 100)
+-   `ncores`: Integer. The number of CPU cores to use for parallel processing (default: 1)
+-   `seed`: Integer. Random seed for reproducibility (default: 0)
 
 ### Returns
 
@@ -61,30 +61,15 @@ A named integer vector of cluster assignments for each feature.
 
 ### Algorithm
 
-1. Generate all unique pairs of features (including self-pairs)
-2. For each bootstrap iteration:
-   - Resample samples with replacement
-   - Perform k-means clustering
-   - Record which features cluster together
-3. Calculate consensus proportions: how often each pair of features co-clustered
-4. Build a symmetric co-clustering matrix
-5. Perform hierarchical clustering on 1 - consensus matrix
-6. Cut tree to obtain k final clusters
-
-## Building the Package
-
-To regenerate documentation and build the package:
-
-```r
-# Load roxygen2
-library(roxygen2)
-
-# Generate documentation
-roxygen2::roxygenize()
-
-# Build and install
-devtools::install()
-```
+1.  Generate all unique pairs of features (including self-pairs)
+2.  For each bootstrap iteration:
+    -   Resample samples with replacement
+    -   Perform k-means clustering
+    -   Record which features cluster together
+3.  Calculate consensus proportions: how often each pair of features co-clustered
+4.  Build a symmetric co-clustering matrix
+5.  Perform hierarchical clustering on 1 - consensus matrix
+6.  Cut tree to obtain k final clusters
 
 ## License
 

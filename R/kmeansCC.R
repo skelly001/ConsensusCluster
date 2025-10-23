@@ -1,41 +1,76 @@
-library(tidyverse)
-library(MSnSet.utils)
-library(pbapply)
-library(parallel)
-
-load("testData/shotgun_topdown_int_modann_cnt_wres.RData")
-
-fData(m)$feature <- rownames(fData(m))
-
-# Check data quality
-plotNA(m)
-boxplot(exprs(m), outline = FALSE)
-hist(rowMeans(exprs(m), na.rm = TRUE), 100)
-
-# Impute missing values
-if (!file.exists("testData/RD8a_m1_imputed.RData")) {
-  exprs(m) <- t(completeObs(pca(as(m, "ExpressionSet"),
-                                method = "svdImpute",
-                                nPcs = min(dim(m)),
-                                center = TRUE)))
-  save(m, file = "testData/RD8a_m1_imputed.RData")
-} else {
-  load("testData/RD8a_m1_imputed.RData")
-}
-
-# Z-score normalization
-exprs(m) <- t(scale(t(exprs(m))))
-m1 <- m[1:100, 1:20]
-
-
-# K-means Consensus Clustering --------------------------------------------
-data = exprs(m1)
-  k = 4
-  reps = 100
-  ncores = 4
-  seed = 0
-
-kmeansCC <- function(data, k, reps, ncores, seed) {
+#' K-means Consensus Clustering
+#'
+#' Performs k-means consensus clustering using bootstrap resampling to generate
+#' stable cluster assignments. This function runs multiple k-means clustering
+#' iterations on bootstrapped samples of the data, builds a consensus matrix
+#' based on co-clustering frequencies, and performs hierarchical clustering
+#' on the consensus matrix.
+#'
+#' @param data A numeric matrix where rows are features and columns are samples.
+#'   Row names are required for feature identification.
+#' @param k Integer. The number of clusters to identify.
+#' @param reps Integer. The number of bootstrap resampling iterations to perform.
+#' @param ncores Integer. The number of CPU cores to use for parallel processing.
+#' @param seed Integer. Random seed for reproducibility. Default is 0.
+#'
+#' @return An integer vector of cluster assignments for each feature, named with
+#'   the feature names from the input data.
+#'
+#' @details
+#' The function performs the following steps:
+#' \enumerate{
+#'   \item Generates all unique feature pairs (including self-pairs)
+#'   \item For each bootstrap iteration:
+#'     \itemize{
+#'       \item Samples columns (samples) with replacement
+#'       \item Runs k-means clustering
+#'       \item Records which feature pairs cluster together
+#'     }
+#'   \item Aggregates co-clustering frequencies across all iterations
+#'   \item Builds a symmetric consensus matrix
+#'   \item Performs hierarchical clustering (complete linkage) on 1 - consensus
+#'   \item Cuts the dendrogram to obtain k final clusters
+#' }
+#'
+#' The function uses parallel processing for both the bootstrap iterations and
+#' the aggregation of results. Random number generation uses L'Ecuyer-CMRG
+#' for reproducibility in parallel contexts.
+#'
+#' @importFrom dplyr slice_sample left_join select mutate if_else %>%
+#' @importFrom tidyr pivot_wider
+#' @importFrom tibble column_to_rownames
+#' @importFrom Matrix sparseVector
+#' @importFrom parallel makeCluster stopCluster clusterExport clusterEvalQ clusterSplit
+#' @importFrom parallel nextRNGStream
+#' @importFrom pbapply pblapply
+#' @importFrom purrr reduce
+#' @importFrom fastcluster hclust
+#' @importFrom stats kmeans cutree as.dist
+#' @importFrom methods as
+#' @importFrom rlang .data
+#'
+#' @export
+#'
+#' @examples
+#' \dontrun{
+#' # Create example data matrix
+#' set.seed(123)
+#' data <- matrix(rnorm(1000), nrow = 100, ncol = 10)
+#' rownames(data) <- paste0("Feature_", 1:100)
+#'
+#' # Run consensus clustering
+#' clusters <- kmeansCC(
+#'   data = data,
+#'   k = 4,
+#'   reps = 100,
+#'   ncores = 2,
+#'   seed = 0
+#' )
+#'
+#' # View cluster assignments
+#' table(clusters)
+#' }
+kmeansCC <- function(data, k, reps, ncores, seed = 0) {
 
   # Generate all unique pairs including self-pairs
   n_features <- length(rownames(data))
@@ -58,7 +93,7 @@ kmeansCC <- function(data, k, reps, ncores, seed) {
   combinations2 <- combinations %>%
     left_join(key, by = c("combination.1" = "feature")) %>%
     left_join(key, by = c("combination.2" = "feature")) %>%
-    select(combination.1 = key.x, combination.2 = key.y)
+    select(combination.1 = .data$key.x, combination.2 = .data$key.y)
 
   # Inner function: single bootstrap clustering iteration
   run_kmeans_iteration <- function(seed) {
@@ -83,16 +118,16 @@ kmeansCC <- function(data, k, reps, ncores, seed) {
       row.names = NULL
     ) %>%
       dplyr::left_join(key, by = c("clustMember" = "feature")) %>%
-      dplyr::select(-clustMember)
+      dplyr::select(-.data$clustMember)
 
     # Determine co-clustering for all pairs
     out <- combinations2 %>%
       dplyr::left_join(clust_assignments, by = c("combination.1" = "key")) %>%
-      dplyr::select(-combination.1) %>%
+      dplyr::select(-.data$combination.1) %>%
       dplyr::left_join(clust_assignments, by = c("combination.2" = "key")) %>%
-      dplyr::select(-combination.2) %>%
+      dplyr::select(-.data$combination.2) %>%
       dplyr::mutate(coclustered = as.integer(dplyr::if_else(.[[1]] == .[[2]], 1, 0))) %>%
-      dplyr::select(coclustered)
+      dplyr::select(.data$coclustered)
 
     as(out[[1]], "sparseVector")
   }
@@ -142,7 +177,7 @@ kmeansCC <- function(data, k, reps, ncores, seed) {
   # Build symmetric co-clustering matrix
   upper_coclust <- combinations %>%
     mutate(value = res_all) %>%
-    pivot_wider(names_from = combination.2, values_from = value) %>%
+    pivot_wider(names_from = .data$combination.2, values_from = .data$value) %>%
     column_to_rownames("combination.1")
 
   upper_coclust[lower.tri(upper_coclust, diag = FALSE)] <- 0
@@ -154,17 +189,3 @@ kmeansCC <- function(data, k, reps, ncores, seed) {
   hc <- fastcluster::hclust(as.dist(1 - coclust), method = "complete")
   cutree(tree = hc, k = k)
 }
-
-
-# Run consensus clustering
-t <- Sys.time()
-
-res <- kmeansCC(
-  data = exprs(m1),
-  k = 4,
-  reps = 100,
-  ncores = 4,
-  seed = 0
-)
-
-Sys.time() - t
